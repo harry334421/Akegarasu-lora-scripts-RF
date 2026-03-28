@@ -122,9 +122,29 @@
                     "constant",
                     "constant_with_warmup",
                 ]).default("cosine_with_restarts").description("学习率调度器设置"),
-                lr_warmup_steps: Schema.number().default(0).description('学习率预热步数'),
+
+                // 添加 warmup_mode 来选择模式
+                warmup_mode: Schema.union(["steps", "percentage"]).default("steps").description("预热模式：步数或百分比"),
                 loss_type: Schema.union(["l1", "l2", "huber", "smooth_l1"]).description("损失函数类型"),
             }).description("学习率与优化器设置"),
+
+            // 当选择 steps 模式时显示
+            Schema.union([
+                Schema.object({
+                    warmup_mode: Schema.const("steps"),
+                    lr_warmup_steps: Schema.number().min(0).default(0).description('学习率预热步数（绝对值）'),
+                }),
+            Schema.object({}),
+            ]),
+
+            // 当选择 percentage 模式时显示
+            Schema.union([
+                Schema.object({
+                warmup_mode: Schema.const("percentage"),
+                lr_warmup_percentage: Schema.number().role("slider").min(0).max(100).step(1).default(10).description('学习率预热百分比（%）'),
+            }),
+            Schema.object({}),
+            ]),
 
             Schema.union([
                 Schema.object({

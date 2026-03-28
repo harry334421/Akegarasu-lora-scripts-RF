@@ -127,6 +127,30 @@ async def create_toml_file(request: Request):
     config: dict = json.loads(json_data.decode("utf-8"))
     train_utils.fix_config_types(config)
 
+    # 处理 warmup 转换
+    if "warmup_mode" in config:
+        warmup_mode = config.pop("warmup_mode")
+        
+        if warmup_mode == "percentage" and "lr_warmup_percentage" in config:
+            # 根据总步数计算实际预热步数
+            max_train_epochs = config.get("max_train_epochs", 10)
+            train_batch_size = config.get("train_batch_size", 1)
+            total_images = len(train_utils.get_total_images(config["train_data_dir"]))
+            
+            # 计算总步数：(总图片数 / batch_size) * epoch数
+            steps_per_epoch = (total_images + train_batch_size - 1) // train_batch_size
+            total_steps = steps_per_epoch * max_train_epochs
+            
+            # 计算预热步数
+            warmup_percentage = config.pop("lr_warmup_percentage")
+            config["lr_warmup_steps"] = int(total_steps * warmup_percentage / 100)
+            
+            log.info(f"Warmup calculation: {total_images} images, {steps_per_epoch} steps/epoch, "
+                    f"{total_steps} total steps, {warmup_percentage}% = {config['lr_warmup_steps']} steps")
+        elif warmup_mode == "steps":
+            # 已经有 lr_warmup_steps 了，保持不变
+            config.pop("lr_warmup_percentage", None)
+
     gpu_ids = config.pop("gpu_ids", None)
 
     suggest_cpu_threads = 8 if len(train_utils.get_total_images(config["train_data_dir"])) > 200 else 2
