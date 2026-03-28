@@ -1,0 +1,42 @@
+[[datasets]]
+
+[[datasets.subsets]]
+caption_dropout_rate = 0
+caption_tag_dropout_rate = 0
+caption_extension = ".txt"
+image_dir = "D:/[01]-Entertainment/[01]-AITest/训练集等/rurudo-traindata-20250120/train/face"
+num_repeats = 6
+shuffle_caption = true
+
+[[datasets.subsets]]
+caption_dropout_rate = 0
+caption_tag_dropout_rate = 0
+caption_extension = ".txt"
+image_dir = "D:/[01]-Entertainment/[01]-AITest/训练集等/rurudo-traindata-20250120/train/monochrome"
+num_repeats = 9
+shuffle_caption = true
+
+[[datasets.subsets]]
+caption_dropout_rate = 0
+caption_tag_dropout_rate = 0
+caption_extension = ".txt"
+image_dir = "D:/[01]-Entertainment/[01]-AITest/训练集等/rurudo-traindata-20250120/train/rrd1"
+num_repeats = 10
+shuffle_caption = true
+
+[[datasets.subsets]]
+caption_dropout_rate = 0
+caption_tag_dropout_rate = 0
+caption_extension = ".txt"
+image_dir = "D:/[01]-Entertainment/[01]-AITest/训练集等/rurudo-traindata-20250120/train/rrd2"
+num_repeats = 10
+shuffle_caption = true
+
+
+[general]
+resolution = 1536
+enable_bucket = true
+min_bucket_reso = 256
+bucket_no_upscale = true
+max_bucket_reso = 2880
+bucket_reso_steps = 32

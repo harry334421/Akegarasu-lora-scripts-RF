@@ -21,12 +21,17 @@ def tk_window():
 def open_file_selector(
         initialdir="",
         title="Select a file",
-        filetypes="*") -> str:
+        filetypes="None") -> str:
     global last_dir
     if last_dir != "":
         initialdir = last_dir
     elif initialdir == "":
         initialdir = os.getcwd()
+
+    # 默认值处理
+    if filetypes is None:
+        filetypes = [("All files", "*.*")]
+
     try:
         tk_window()
         filename = askopenfilename(

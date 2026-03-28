@@ -1,25 +1,20 @@
 [additional_network_arguments]
-unet_lr            = 2.22e-6
+unet_lr            = 2e-6
 train_text_encoder = true
 learning_rate_te1 = 4e-7
 learning_rate_te2 = 6e-7
 
-[optimizer_arguments]
-lr_scheduler       = "cosine_with_restart"
-lr_scheduler_num_cycles = 5
-optimizer_type     = "Lion"
-optimizer_args     = ["weight_decay=0.01", "betas=0.9,0.99"]
-min_lr             = 0
 
-[training_arguments]
+[optimizer_arguments]
 model_train_type = "sdxl-finetune"
-max_train_epochs    = 14
+max_train_epochs    = 11
 protected_tags_file = "F:/Software/lora-scripts/config/protected.txt"
-save_every_n_epochs = 3
+loss_type          = "l2"
+save_every_n_epochs = 2
 train_batch_size   = 1
 max_grad_norm      = 1
 weighted_captions  = false
-seed               = 845
+seed               = 1234
 max_token_length   = 225
 lowram             = false
 max_data_loader_n_workers = 4
@@ -36,6 +31,12 @@ sample_sampler = "euler_a"
 sample_every_n_epochs = 2
 sample_prompts = "F:/Software/lora-scripts/config/sample_prompts.txt"
 
+[training_arguments]
+
+output_dir         = "F:/Software/lora-scripts/output"
+output_name        = "rf-rurudo"
+
+
 [model_arguments]
 pretrained_model_name_or_path = "F:/下载资源/Illustrious-XL-v2.0.safetensors" #OwO
 vae = "F:/Software/lora-scripts/sd-models/EQB7DecB2.safetensors"
@@ -43,8 +44,11 @@ v2                    = false
 sdxl                  = true
 gradient_checkpointing = true
 gradient_accumulation_steps = 1
-xformers = true
-
+sdpa                  = false
+xformers              = true
+#logging_dir ="logs"
+#log_with = "wandb"
+#wandb_run_name = "Chenkin-RF-0.3"
 [saving_arguments]
 save_model_as = "safetensors"
 
@@ -52,4 +56,18 @@ save_model_as = "safetensors"
 [dataset_arguments]
 cache_latents              = true
 cache_latents_to_disk      = true
-lr_warmup_steps            = 2350
+lr_warmup_steps            = 1900
+
+#edm2_loss_weighting = true
+#edm2_loss_weighting_optimizer = "torch.optim.AdamW"
+#edm2_loss_weighting_optimizer_lr = "7e-3"
+#edm2_loss_weighting_optimizer_args = "{'weight_decay':5e-3}"
+#edm2_loss_weighting_lr_scheduler = true
+#edm2_loss_weighting_lr_scheduler_warmup_percent = 0.1
+#edm2_loss_weighting_lr_scheduler_constant_percent = 0.9
+#edm2_loss_weighting_generate_graph = true
+#edm2_loss_weighting_generate_graph_output_dir = "/workspace/bluvoll/edm2tests"
+#edm2_loss_weighting_generate_graph_every_x_steps = 10
+#edm2_loss_weighting_generate_graph_y_limit = 40
+#edm2_loss_weighting_initial_weights = ""
+#edm2_loss_weighting_num_channels = 448

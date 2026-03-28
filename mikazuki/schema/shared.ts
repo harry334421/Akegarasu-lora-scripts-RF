@@ -167,7 +167,13 @@
                 }),
                 Schema.object({}),
             ]),
-
+            Schema.union([
+                Schema.object({
+                    optimizer_type: Schema.const('AdamW8bit').required(),
+                     use_kahan_summation: Schema.boolean().default(false).description('启用 Kahan 求和以提高数值稳定性'),
+                }),
+            Schema.object({}),
+            ]),
             Schema.object({
                 optimizer_args_custom: Schema.array(String).role('table').description('自定义 optimizer_args，一行一个'),
             })

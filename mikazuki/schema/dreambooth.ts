@@ -176,6 +176,7 @@ Schema.intersect([
         caption_dropout_rate: Schema.number().min(0).max(1).step(0.1).description("丢弃全部标签的概率，对一个图片概率不使用 caption 或 class token"),
         caption_dropout_every_n_epochs: Schema.number().min(0).max(100).step(1).description("每 N 个 epoch 丢弃全部标签"),
         caption_tag_dropout_rate: Schema.number().min(0).max(1).step(0.1).description("按逗号分隔的标签来随机丢弃 tag 的概率"),
+        protected_tags_file: Schema.string().role('filepicker', { type: "file", accept: ".txt" }).description("受保护标签文件路径"),
     }).description("caption（Tag）选项"),
 
     Schema.object({
@@ -184,39 +185,44 @@ Schema.intersect([
         multires_noise_discount: Schema.number().step(0.1).description("多分辨率（金字塔）衰减率 推荐 0.3-0.8，须同时与上方参数 multires_noise_iterations 一同启用"),
     }).description("噪声设置"),
 
-    // Rectified Flow 设置 (仅 SDXL 微调)
-    Schema.union([
+
+// Rectified Flow 设置 (仅 SDXL 微调)
+Schema.union([
+    Schema.intersect([
         Schema.object({
             model_train_type: Schema.const("sdxl-finetune").required(),
-        }).extend(Schema.intersect([
+        }),
+        Schema.object({
+            flow_model: Schema.boolean().default(false).description("启用 Rectified Flow 训练目标（用于 RF 模型微调）"),
+        }).description("Rectified Flow 设置"),
+
+        Schema.union([
             Schema.object({
-                flow_model: Schema.boolean().default(false).description("启用 Rectified Flow 训练目标（用于 RF 模型微调）"),
-            }).description("Rectified Flow 设置"),
+                flow_model: Schema.const(true).required(),
+                flow_use_ot: Schema.boolean().default(false).description("使用余弦最优传输配对 latent 和噪声"),
+                flow_timestep_distribution: Schema.union(["logit_normal", "uniform"]).default("logit_normal").description("时间步采样分布"),
+                flow_uniform_static_ratio: Schema.number().step(0.1).description("固定的时间步偏移比率（例如 2），留空不使用"),
+                contrastive_flow_matching: Schema.boolean().default(false).description("启用对比流匹配 (ΔFM) 目标"),
+                cfm_lambda: Schema.number().step(0.01).default(0.05).description("ΔFM 损失中对比项的权重"),
+                use_zero_cond: Schema.boolean().default(false).description("使用零条件"),
+                vae_custom_scale: Schema.number().step(0.01).description("VAE 自定义缩放"),
+                vae_custom_shift: Schema.number().step(0.01).description("VAE 自定义偏移"),
+            }),
+            Schema.object({}),
+        ]),
 
-            Schema.union([
-                Schema.object({
-                    flow_model: Schema.const(true).required(),
-                    flow_use_ot: Schema.boolean().default(false).description("使用余弦最优传输配对 latent 和噪声"),
-                    flow_timestep_distribution: Schema.union(["logit_normal", "uniform"]).default("logit_normal").description("时间步采样分布"),
-                    flow_uniform_static_ratio: Schema.number().step(0.1).description("固定的时间步偏移比率（例如 2），留空不使用"),
-                    contrastive_flow_matching: Schema.boolean().default(false).description("启用对比流匹配 (ΔFM) 目标"),
-                    cfm_lambda: Schema.number().step(0.01).default(0.05).description("ΔFM 损失中对比项的权重"),
-                }),
-                Schema.object({}),
-            ]),
-
-            Schema.union([
-                Schema.object({
-                    flow_model: Schema.const(true).required(),
-                    flow_timestep_distribution: Schema.const("logit_normal").required(),
-                    flow_logit_mean: Schema.number().step(0.1).default(0.0).description("logit-normal 分布的均值"),
-                    flow_logit_std: Schema.number().step(0.1).default(1.0).description("logit-normal 分布的标准差"),
-                }),
-                Schema.object({}),
-            ]),
-        ])),
-        Schema.object({}),
+        Schema.union([
+            Schema.object({
+                flow_model: Schema.const(true).required(),
+                flow_timestep_distribution: Schema.const("logit_normal").required(),
+                flow_logit_mean: Schema.number().step(0.1).default(0.0).description("logit-normal 分布的均值"),
+                flow_logit_std: Schema.number().step(0.1).default(1.0).description("logit-normal 分布的标准差"),
+            }),
+            Schema.object({}),
+        ]),
     ]),
+    Schema.object({}),
+]),
 
     Schema.object({
         seed: Schema.number().default(1337).description("随机种子"),

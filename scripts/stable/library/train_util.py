@@ -777,6 +777,33 @@ class BaseDataset(torch.utils.data.Dataset):
                 fixed_tokens = []
                 flex_tokens = []
                 fixed_suffix_tokens = []
+
+                if not hasattr(self, "_protected_tags"):
+                    self._protected_tags = set()
+        if hasattr(self, "protected_tags_file") and self.protected_tags_file and os.path.exists(self.protected_tags_file):
+            logger.info(f"Loading protected tags from {self.protected_tags_file}")
+            with open(self.protected_tags_file, "r", encoding="utf-8") as f:
+                self._protected_tags = {line.strip().lower() for line in f if line.strip()}
+            logger.info(f"Loaded {len(self._protected_tags)} protected tags.")
+
+    log_tag_dropout = self.log_caption_tag_dropout and subset.caption_tag_dropout_rate > 0
+
+    def dropout_tags(tokens, record_details=False):
+        if subset.caption_tag_dropout_rate <= 0:
+            return tokens, [], []
+        kept = []
+        protected_tokens = []
+        dropped_tokens = []
+        for token in tokens:
+            is_protected = token.lower() in self._protected_tags  # ← 检查保护标签
+            if is_protected or random.random() >= subset.caption_tag_dropout_rate:
+                kept.append(token)
+                if record_details and is_protected:
+                    protected_tokens.append(token)
+            elif record_details:
+                dropped_tokens.append(token)
+        return kept, protected_tokens, dropped_tokens
+                
                 if (
                     hasattr(subset, "keep_tokens_separator")
                     and subset.keep_tokens_separator
@@ -3048,7 +3075,11 @@ def add_optimizer_arguments(parser: argparse.ArgumentParser):
         "AdaFactor. "
         "Also, you can use any optimizer by specifying the full path to the class, like 'bitsandbytes.optim.AdEMAMix8bit' or 'bitsandbytes.optim.PagedAdEMAMix8bit'.",
     )
-
+   parser.add_argument(
+    "--use_kahan_summation",
+    action="store_true",
+    help="use Kahan summation for AdamW8bit optimizer to improve numerical stability / AdamW8bitで Kahan summation を使用して数値安定性を向上させる",
+    )
     # backward compatibility
     parser.add_argument(
         "--use_8bit_adam",

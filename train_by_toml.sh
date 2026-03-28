@@ -1,7 +1,7 @@
 #!/bin/bash
 # LoRA train script by @Akegarasu
 
-config_file="./config/default.toml"          # config file | 使用 toml 文件指定训练参数
+config_file="./config/config1.toml"          # config file | 使用 toml 文件指定训练参数
 sample_prompts="./config/sample_prompts.txt" # prompt file for sample | 采样 prompts 文件, 留空则不启用采样功能
 
 sdxl=0      # train sdxl LoRA | 训练 SDXL LoRA

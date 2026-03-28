@@ -60,3 +60,7 @@ max_bucket_reso = 1024
 caption_extension = ".txt"
 max_token_length = 225
 seed = 1337
+
+[optimizer_arguments]
+optimizer_type = "AdamW8bit"
+use_kahan_summation = true  # Enable Kahan Summation

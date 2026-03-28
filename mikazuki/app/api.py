@@ -229,6 +229,11 @@ async def pick_file(picker_type: str):
     elif picker_type == "model-file":
         file_types = [("checkpoints", "*.safetensors;*.ckpt;*.pt"), ("all files", "*.*")]
         coro = asyncio.to_thread(open_file_selector, "", "Select file", file_types)
+    elif picker_type == "file":
+        file_types = [("text files", "*.txt"), ("all files", "*.*")]
+        coro = asyncio.to_thread(open_file_selector, "", "Select file", file_types)
+    else:
+        return APIResponseFail(message=f"Invalid picker_type: {picker_type}")
 
     result = await coro
     if result == "":

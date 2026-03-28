@@ -1,8 +1,8 @@
 [additional_network_arguments]
-unet_lr            = 2.22e-6
+unet_lr            = 2e-6
 train_text_encoder = true
 learning_rate_te1 = 4e-7
-learning_rate_te2 = 6e-7
+learning_rate_te2 = 5e-7
 
 [optimizer_arguments]
 lr_scheduler       = "cosine_with_restart"
@@ -13,13 +13,20 @@ min_lr             = 0
 
 [training_arguments]
 model_train_type = "sdxl-finetune"
+train_data_dir = "D:/[01]-Entertainment/[01]-AITest/训练集等/rurudo-traindata-20250120/train"
 max_train_epochs    = 14
 protected_tags_file = "F:/Software/lora-scripts/config/protected.txt"
+esolution = "2048,2048"
+enable_bucket = true
+min_bucket_reso = 256
+max_bucket_reso = 2880
+bucket_reso_steps = 32
 save_every_n_epochs = 3
 train_batch_size   = 1
 max_grad_norm      = 1
 weighted_captions  = false
 seed               = 845
+resolution = "1536,1536"
 max_token_length   = 225
 lowram             = false
 max_data_loader_n_workers = 4
@@ -35,6 +42,15 @@ multires_noise_discount = 0.2
 sample_sampler = "euler_a"
 sample_every_n_epochs = 2
 sample_prompts = "F:/Software/lora-scripts/config/sample_prompts.txt"
+log_with = "tensorboard"
+log_tracker_name = "rrd"
+logging_dir = "./logs"
+caption_extension = ".txt"
+shuffle_caption = true
+weighted_captions = false
+keep_tokens = 2
+max_token_length = 225
+no_token_padding = false
 
 [model_arguments]
 pretrained_model_name_or_path = "F:/下载资源/Illustrious-XL-v2.0.safetensors" #OwO
