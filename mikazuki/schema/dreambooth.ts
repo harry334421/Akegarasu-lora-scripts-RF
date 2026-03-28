@@ -35,6 +35,7 @@ Schema.intersect([
         min_bucket_reso: Schema.number().default(256).description("arb 桶最小分辨率"),
         max_bucket_reso: Schema.number().default(1024).description("arb 桶最大分辨率"),
         bucket_reso_steps: Schema.number().default(64).description("arb 桶分辨率划分单位，SDXL 可以使用 32"),
+        bucket_no_upscale: Schema.boolean().default(true).description("arb 桶不放大图片"),  
     }).description("数据集设置"),
 
     Schema.object({
@@ -185,31 +186,37 @@ Schema.intersect([
         multires_noise_discount: Schema.number().step(0.1).description("多分辨率（金字塔）衰减率 推荐 0.3-0.8，须同时与上方参数 multires_noise_iterations 一同启用"),
     }).description("噪声设置"),
 
+    Schema.object({
+        color_aug: Schema.boolean().description("颜色改变"),
+        flip_aug: Schema.boolean().description("图像翻转"),
+        random_crop: Schema.boolean().description("随机剪裁"),
+    }).description("数据增强"),
 
-// Rectified Flow 设置 (仅 SDXL 微调)
-Schema.union([
-    Schema.intersect([
-        Schema.object({
-            model_train_type: Schema.const("sdxl-finetune").required(),
-        }),
-        Schema.object({
-            flow_model: Schema.boolean().default(false).description("启用 Rectified Flow 训练目标（用于 RF 模型微调）"),
-        }).description("Rectified Flow 设置"),
 
-        Schema.union([
+    // Rectified Flow 设置 (仅 SDXL 微调)
+    Schema.union([
+        Schema.intersect([
             Schema.object({
-                flow_model: Schema.const(true).required(),
-                flow_use_ot: Schema.boolean().default(false).description("使用余弦最优传输配对 latent 和噪声"),
-                flow_timestep_distribution: Schema.union(["logit_normal", "uniform"]).default("logit_normal").description("时间步采样分布"),
-                flow_uniform_static_ratio: Schema.number().step(0.1).description("固定的时间步偏移比率（例如 2），留空不使用"),
-                contrastive_flow_matching: Schema.boolean().default(false).description("启用对比流匹配 (ΔFM) 目标"),
-                cfm_lambda: Schema.number().step(0.01).default(0.05).description("ΔFM 损失中对比项的权重"),
-                use_zero_cond: Schema.boolean().default(false).description("使用零条件"),
-                vae_custom_scale: Schema.number().step(0.01).description("VAE 自定义缩放"),
-                vae_custom_shift: Schema.number().step(0.01).description("VAE 自定义偏移"),
+                model_train_type: Schema.const("sdxl-finetune").required(),
             }),
-            Schema.object({}),
-        ]),
+            Schema.object({
+                flow_model: Schema.boolean().default(false).description("启用 Rectified Flow 训练目标（用于 RF 模型微调）"),
+            }).description("Rectified Flow 设置"),
+
+            Schema.union([
+                Schema.object({
+                    flow_model: Schema.const(true).required(),
+                    flow_use_ot: Schema.boolean().default(false).description("使用余弦最优传输配对 latent 和噪声"),
+                    flow_timestep_distribution: Schema.union(["logit_normal", "uniform"]).default("logit_normal").description("时间步采样分布"),
+                    flow_uniform_static_ratio: Schema.number().step(0.1).description("固定的时间步偏移比率（例如 2），留空不使用"),
+                    contrastive_flow_matching: Schema.boolean().default(false).description("启用对比流匹配 (ΔFM) 目标"),
+                    cfm_lambda: Schema.number().step(0.01).default(0.05).description("ΔFM 损失中对比项的权重"),
+                    use_zero_cond: Schema.boolean().default(false).description("使用零条件"),
+                    vae_custom_scale: Schema.number().step(0.01).description("VAE 自定义缩放"),
+                    vae_custom_shift: Schema.number().step(0.01).description("VAE 自定义偏移"),
+                }),
+                Schema.object({}),
+            ]),
 
         Schema.union([
             Schema.object({
@@ -241,6 +248,9 @@ Schema.union([
         cache_latents_to_disk: Schema.boolean().default(true).description("缓存图像 latent 到磁盘"),
         persistent_data_loader_workers: Schema.boolean().default(true).description("保留加载训练集的worker，减少每个 epoch 之间的停顿。"),
         vae_batch_size: Schema.number().min(1).description("vae 编码批量大小"),
+        no_half_vae: Schema.boolean().description("不使用半精度 VAE，当出现 NaN detected in latents 报错时使用"), 
+        cache_text_encoder_outputs: Schema.boolean().description("缓存文本编码器的输出，减少显存使用。使用时需要关闭 shuffle_caption"), 
+        cache_text_encoder_outputs_to_disk: Schema.boolean().description("缓存文本编码器的输出到磁盘"), 
     }).description("速度优化选项"),
 
     Schema.object({
