@@ -450,6 +450,11 @@ class NetworkTrainer:
         # データセット側にも学習ステップを送信
         train_dataset_group.set_max_train_steps(args.max_train_steps)
 
+        # --- 修复代码开始 ---
+        if hasattr(args, 'warmup_percentage') and args.warmup_percentage:
+            args.lr_warmup_steps = int(args.max_train_steps * (float(args.warmup_percentage) / 100))
+            accelerator.print(f"Correcting warmup steps based on real total steps: {args.lr_warmup_steps}")
+
         # lr schedulerを用意する
         lr_scheduler = train_util.get_scheduler_fix(args, optimizer, accelerator.num_processes)
 
