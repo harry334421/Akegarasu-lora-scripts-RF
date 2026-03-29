@@ -1,75 +1,155 @@
 import torch
-import bitsandbytes as bnb
-from typing import List, Dict, Any
-
-class AdamW8bitKahan(bnb.optim.AdamW8bit):
-    """
-    AdamW8bit optimizer with Kahan Summation for improved numerical stability.
-    Kahan Summation reduces accumulated floating-point errors.
-    """
-    
-    def __init__(self, params, lr=1e-3, betas=(0.9, 0.999), eps=1e-8, 
-                 weight_decay=0.01, use_kahan=True, **kwargs):
-        super().__init__(params, lr=lr, betas=betas, eps=eps, 
-                        weight_decay=weight_decay, **kwargs)
-        self.use_kahan = use_kahan
-        
-        # Initialize Kahan compensation buffers
-        if self.use_kahan:
-            self.kahan_compensation = {}
-            for group in self.param_groups:
-                for p in group['params']:
-                    if p.requires_grad:
-                        # Store compensation for each parameter
-                        self.kahan_compensation[id(p)] = torch.zeros_like(p.data)
-    
-    def step(self, closure=None):
-        """Performs a single optimization step with optional Kahan summation."""
-        loss = None
-        if closure is not None:
-            loss = closure()
-        
-        # Call parent step
-        super().step()
-        
-        # Apply Kahan summation if enabled
-        if self.use_kahan:
-            self._apply_kahan_summation()
-        
-        return loss
-    
-    def _apply_kahan_summation(self):
-        """Apply Kahan summation to reduce floating-point errors."""
-        for group in self.param_groups:
-            for p in group['params']:
-                if p.requires_grad and id(p) in self.kahan_compensation:
-                    # Kahan summation: reduce accumulated rounding errors
-                    compensation = self.kahan_compensation[id(p)]
-                    
-                    # y = value + compensation
-                    # t = sum + y
-                    # compensation = y - (t - sum)
-                    y = p.data - compensation
-                    t = p.data + y
-                    compensation = y - (t - p.data)
-                    
-                    # Update parameter and compensation
-                    self.kahan_compensation[id(p)] = compensation
+import bitsandbytes
+import bitsandbytes.functional as F
 
 
-def create_optimizer_with_kahan(optimizer_type: str, trainable_params, lr: float, 
-                                optimizer_kwargs: Dict[str, Any]):
+def _stochastic_round_bf16(fp32_tensor, out_bf16):
+    """Stochastically round fp32 to bf16 via bit manipulation.
+
+    bf16 shares fp32's 8-bit exponent, so truncating the lower 16 mantissa
+    bits is the only difference.  Adding uniform random bits in [0, 2^16)
+    before truncation gives an unbiased rounding whose expected value equals
+    the fp32 input, even when the true update is smaller than one bf16 ULP.
     """
-    Factory function to create optimizers with Kahan summation support.
-    """
-    
-    if optimizer_type.lower() == "adamw8bit":
-        return AdamW8bitKahan(
-            trainable_params, 
-            lr=lr,
-            use_kahan=True,
-            **optimizer_kwargs
-        )
-    else:
-        # Fall back to regular optimizer
-        raise ValueError(f"Kahan summation not implemented for {optimizer_type}")
+    bits = fp32_tensor.view(torch.int32)
+    rand = torch.randint_like(bits, 0, 1 << 16)
+    out_bf16.copy_(((bits + rand) & ~0xFFFF).view(torch.float32))
+
+
+class AdamW8bitKahan(bitsandbytes.optim.AdamW8bit):
+    def __init__(self, *args, stabilize=True, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.stabilize = stabilize
+
+    @torch.no_grad()
+    def init_state(self, group, p, gindex, pindex):
+        super().init_state(group, p, gindex, pindex)
+        self.state[p]['shift'] = self.get_state_buffer(p, dtype=p.dtype)
+
+    @torch.no_grad()
+    def update_step(self, group, p, gindex, pindex):
+        # avoid update error from non-contiguous memory layout
+        p.data = p.data.contiguous()
+        p.grad = p.grad.contiguous()
+
+        state = self.state[p]
+        grad = p.grad
+
+        config = self.get_config(gindex, pindex, group)
+
+        state["step"] += 1
+        step = state["step"]
+
+        if config["percentile_clipping"] < 100:
+            current_gnorm, clip_value, gnorm_scale = F.percentile_clipping(
+                grad,
+                state["gnorm_vec"],
+                step,
+                config["percentile_clipping"],
+            )
+        else:
+            gnorm_scale = 1.0
+
+        shift = state['shift']
+
+        # StableAdamW
+        if self.stabilize:
+            exp_avg_sq = state['state2']
+            eps_sq = torch.tensor(config['eps']**2, dtype=exp_avg_sq.dtype, device=exp_avg_sq.device)
+            rms = grad.pow(2).div_(exp_avg_sq.maximum(eps_sq)).mean().sqrt()
+            lr = config['lr'] / max(1, rms.item())
+        else:
+            lr = config['lr']
+
+        if state["state1"].dtype == torch.float:
+            F.optimizer_update_32bit(
+                self.optimizer_name,
+                grad,
+                shift,
+                state["state1"],
+                config["betas"][0],
+                config["eps"],
+                step,
+                lr,
+                state["state2"],
+                config["betas"][1],
+                config["betas"][2] if len(config["betas"]) >= 3 else 0.0,
+                config["alpha"],
+                0.0,
+                gnorm_scale,
+                state["unorm_vec"] if config["max_unorm"] > 0.0 else None,
+                max_unorm=config["max_unorm"],
+                skip_zeros=config["skip_zeros"],
+            )
+
+        elif state["state1"].dtype == torch.uint8 and not config["block_wise"]:
+            F.optimizer_update_8bit(
+                self.optimizer_name,
+                grad,
+                shift,
+                state["state1"],
+                state["state2"],
+                config["betas"][0],
+                config["betas"][1],
+                config["eps"],
+                step,
+                lr,
+                state["qmap1"],
+                state["qmap2"],
+                state["max1"],
+                state["max2"],
+                state["new_max1"],
+                state["new_max2"],
+                0.0,
+                gnorm_scale=gnorm_scale,
+                unorm_vec=state["unorm_vec"] if config["max_unorm"] > 0.0 else None,
+                max_unorm=config["max_unorm"],
+            )
+
+            # swap maxes
+            state["max1"], state["new_max1"] = state["new_max1"], state["max1"]
+            state["max2"], state["new_max2"] = state["new_max2"], state["max2"]
+        elif state["state1"].dtype == torch.uint8 and config["block_wise"]:
+            F.optimizer_update_8bit_blockwise(
+                self.optimizer_name,
+                grad,
+                shift,
+                state["state1"],
+                state["state2"],
+                config["betas"][0],
+                config["betas"][1],
+                config["betas"][2] if len(config["betas"]) >= 3 else 0.0,
+                config["alpha"],
+                config["eps"],
+                step,
+                lr,
+                state["qmap1"],
+                state["qmap2"],
+                state["absmax1"],
+                state["absmax2"],
+                0.0,
+                gnorm_scale=gnorm_scale,
+                skip_zeros=config["skip_zeros"],
+            )
+
+        # --- Decoupled weight decay applied manually via shift buffer ---
+        # bitsandbytes optimizer_update_* would apply weight decay to `shift`
+        # (the Kahan compensation term, near zero) instead of `p` (the actual
+        # weight).  We pass weight_decay=0.0 to the kernel and apply it here,
+        # AFTER the kernel, so the kernel's nearest rounding can't overwrite
+        # our stochastic rounding.
+        wd = config["weight_decay"]
+        if wd > 0.0:
+            # shift -= lr * wd * p   (decoupled weight decay targeting true weight)
+            # Computed in fp32 to avoid sub-ULP loss, then stochastically rounded
+            # back to bf16 so the expected value is preserved across steps.
+            wd_update = p.data.float().mul_(lr * wd)
+            shift_fp32 = shift.float().sub_(wd_update)
+            if shift.dtype == torch.bfloat16:
+                _stochastic_round_bf16(shift_fp32, shift)
+            else:
+                shift.copy_(shift_fp32)
+
+        buffer = p.clone()
+        p.add_(shift)
+        shift.add_(buffer.sub_(p))
